@@ -9,11 +9,13 @@
 import UIKit
 import CoreData
 import RealmSwift
+import ChameleonFramework
 
-class TodoListViewController: UITableViewController {
+class TodoListViewController: SwipeTableViewController {
     
     @IBOutlet weak var searchBarOutlet: UISearchBar!
     
+    @IBOutlet weak var searchBar: UISearchBar!
     var todoItems : Results<Item>?
     let realm = try! Realm()
     var selectedCategory : Category? {
@@ -38,6 +40,32 @@ class TodoListViewController: UITableViewController {
         //        if let items = defaults.array(forKey: "TodoListArray") as? [Item]{
         //            itemArray = items
         //        }
+        tableView.rowHeight = 80.0
+        tableView.separatorStyle = .none
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        
+        // change the title
+        title = selectedCategory?.name
+        
+        if let colourHex = selectedCategory?.color{
+            guard let navBar = navigationController?.navigationBar  else {
+                fatalError("Navigation controller does not exist")
+            }
+            
+            if let navBarColor = UIColor(hexString: colourHex){
+                navBar.barTintColor = navBarColor
+                searchBar.tintColor = navBarColor
+                navBar.tintColor = ContrastColorOf(navBarColor, returnFlat: true )
+            }
+        }
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        guard let originalColor = UIColor(hexString: "1D9BF6") else {fatalError()}
+        navigationController?.navigationBar.barTintColor = originalColor
+        navigationController?.navigationBar.tintColor = FlatWhite()
     }
     
     // MARK - Tableview datasource methods
@@ -47,9 +75,16 @@ class TodoListViewController: UITableViewController {
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoItemCell", for: indexPath)
+        let cell = super.tableView(tableView, cellForRowAt: indexPath)
         if let item = todoItems?[indexPath.row]{
             cell.textLabel?.text = item.title
+            
+            if let color = UIColor(hexString: selectedCategory!.color)?.darken(byPercentage:
+                (CGFloat (indexPath.row))/(CGFloat (todoItems!.count))
+                ){
+                cell.backgroundColor = color
+                cell.textLabel?.textColor = ContrastColorOf(color, returnFlat: true)
+            }
             cell.accessoryType = item.done ? .checkmark : .none
         }else{
             cell.textLabel?.text = "No items added"
@@ -194,12 +229,25 @@ class TodoListViewController: UITableViewController {
         todoItems = selectedCategory?.items.sorted(byKeyPath: "title", ascending: true)
         tableView.reloadData()
     }
+    
+    // MARK delete
+    override func updateModel(at indexPath: IndexPath) {
+        if let itemForDeletion = self.todoItems?[indexPath.row]{
+            do{
+                try self.realm.write {
+                    self.realm.delete(itemForDeletion)
+                }
+            }catch{
+                print("Error while deleting \(error)")
+            }
+        }
+    }
 }
 
 // MARK Search bar methods
 extension TodoListViewController : UISearchBarDelegate{
-
-
+    
+    
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
         
         // using coredata
@@ -211,12 +259,12 @@ extension TodoListViewController : UISearchBarDelegate{
         // using realm
         todoItems = todoItems?.filter("title contains %@", searchBar.text!).sorted(byKeyPath: "date", ascending: true)
     }
-
+    
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-
+        
         if searchBar.text?.count == 0 {
             loadItems()
-
+            
             // to remove the keyboard and hide the blinking of cursor
             // this has to be done on the main queue but in background thread
             DispatchQueue.main.async {

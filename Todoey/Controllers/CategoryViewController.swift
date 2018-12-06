@@ -9,8 +9,10 @@
 import UIKit
 import CoreData
 import RealmSwift
+import SwipeCellKit
+import ChameleonFramework
 
-class CategoryViewController: UITableViewController {
+class CategoryViewController: SwipeTableViewController {
     
     let realm = try! Realm()
     var categories: Results<Category>?
@@ -18,9 +20,13 @@ class CategoryViewController: UITableViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
+        
         // load the categories again
         loadCategories()
+        
+        // increase height
+        tableView.rowHeight = 80
+        tableView.separatorStyle = .none
     }
     
     
@@ -30,12 +36,17 @@ class CategoryViewController: UITableViewController {
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "CategoryCell", for: indexPath)
+        let cell = super.tableView(tableView, cellForRowAt: indexPath)
         cell.textLabel?.text = categories?[indexPath.row].name ?? "There are no active categories present in DB"
+        if let hexValue = categories?[indexPath.row].color {
+            cell.backgroundColor = UIColor(hexString: hexValue)
+        }else{
+            cell.backgroundColor = UIColor.randomFlat
+        }
         return cell
     }
     
-      // MARK : Table view delegate methods
+    // MARK : Table view delegate methods
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         performSegue(withIdentifier: "goToItems", sender: self)
     }
@@ -49,14 +60,14 @@ class CategoryViewController: UITableViewController {
     
     // using coredata
     // MARK : Data manipulation methods : CRUD
-//    func loadItems(request : NSFetchRequest<Category> = Category.fetchRequest()){
-//        do{
-//            categories = try context.fetch(request)
-//        }catch{
-//            print("Error while fetching data: \(error)")
-//        }
-//    }
-
+    //    func loadItems(request : NSFetchRequest<Category> = Category.fetchRequest()){
+    //        do{
+    //            categories = try context.fetch(request)
+    //        }catch{
+    //            print("Error while fetching data: \(error)")
+    //        }
+    //    }
+    
     // using realm
     func loadCategories(){
         categories = realm.objects(Category.self)
@@ -89,6 +100,7 @@ class CategoryViewController: UITableViewController {
             // using the realm
             let newCategory = Category()
             newCategory.name = alertTextField.text!
+            newCategory.color = UIColor.randomFlat.hexValue()
             self.saveCategories(newCategory)
         }
         alert.addTextField { (field) in
@@ -111,5 +123,18 @@ class CategoryViewController: UITableViewController {
         
         // reloading data
         self.tableView.reloadData()
+    }
+    
+    // MARK delete
+    override func updateModel(at indexPath: IndexPath) {
+        if let categoryForDeletion = self.categories?[indexPath.row]{
+            do{
+                try self.realm.write {
+                    self.realm.delete(categoryForDeletion)
+                }
+            }catch{
+                print("Error while deleting \(error)")
+            }
+        }
     }
 }
